@@ -10,6 +10,13 @@ cd ~/.claude-docker
 sudo ln -sf "$(pwd)/claude.sh" /usr/local/bin/claude-docker
 ```
 
+Or, if you prefer not to use `sudo`, add an alias to your shell profile (`~/.zshrc`, `~/.bashrc`, etc.):
+
+```bash
+echo 'alias claude-docker="$HOME/.claude-docker/claude.sh"' >> ~/.zshrc
+source ~/.zshrc
+```
+
 Then just run `claude-docker` from any directory.
 
 ## Setup
@@ -20,23 +27,23 @@ Alternatively, if you have an Anthropic API key (to use your own API credits ins
 
 ```bash
 export ANTHROPIC_API_KEY=your-key-here
-./claude.sh
+claude-docker
 ```
 
 ## Usage
 
 ```bash
 # Mount current directory
-./claude.sh
+claude-docker
 
 # Mount a specific folder
-./claude.sh /path/to/project
+claude-docker /path/to/project
 
 # Mount multiple folders
-./claude.sh /path/to/project /path/to/data
+claude-docker /path/to/project /path/to/data
 
 # One-shot prompt (non-interactive)
-./claude.sh /path/to/project -- -p "fix the tests"
+claude-docker /path/to/project -- -p "fix the tests"
 ```
 
 When run without extra arguments, you get an interactive Claude Code CLI session in your terminal. Type your requests, chat back and forth, and exit with `/exit` or Ctrl+C.
@@ -56,19 +63,19 @@ When run without extra arguments, you get an interactive Claude Code CLI session
 
 ```bash
 # Run with 8GB memory limit
-./claude.sh --memory 8g /path/to/project
+claude-docker --memory 8g /path/to/project
 
 # GPU-enabled session
-./claude.sh --gpu --memory 16g .
+claude-docker --gpu --memory 16g .
 
 # Fully offline/sandboxed (no network)
-./claude.sh --no-network .
+claude-docker --no-network .
 
 # Isolated worktree session
-./claude.sh --worktree feature-auth
+claude-docker --worktree feature-auth
 
 # Force rebuild the image
-./claude.sh --rebuild
+claude-docker --rebuild
 ```
 
 ## How Mounting Works
@@ -104,7 +111,7 @@ Press Enter to resume, or `n` to start fresh.
 List and prune saved sessions:
 
 ```bash
-./claude.sh --sessions
+claude-docker --sessions
 ```
 
 ```

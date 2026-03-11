@@ -207,6 +207,12 @@ else
     workdir="/workspace/$(basename "$first_abs")"
 fi
 
+# --- Shared drop folder for images/files ---
+DROPS_DIR="$HOME/claude-drops"
+if [ -d "$DROPS_DIR" ]; then
+    mount_args+=(-v "$DROPS_DIR:$DROPS_DIR:ro")
+fi
+
 # --- Environment ---
 env_args=()
 if [ -n "${ANTHROPIC_API_KEY:-}" ]; then

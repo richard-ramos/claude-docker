@@ -147,6 +147,16 @@ If `.claude-docker/post-worktree.sh` exists in the repo, it runs on the host aft
 git submodule update --init --recursive
 ```
 
+## Sharing Images and Files
+
+Drag-and-drop doesn't work directly because the host file path doesn't exist inside the container. To share images or files with Claude, use the `~/claude-drops` folder:
+
+```bash
+mkdir -p ~/claude-drops
+```
+
+Copy or move files there, then reference them in Claude by their full path (e.g., `~/claude-drops/screenshot.png`). The folder is automatically mounted read-only when it exists.
+
 ## Auto-Rebuild
 
 The image is rebuilt automatically when the Dockerfile changes — no need to manually run `docker build`. Use `--rebuild` to force a rebuild at any time.

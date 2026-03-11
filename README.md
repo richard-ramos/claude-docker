@@ -21,9 +21,15 @@ Then just run `claude-docker` from any directory.
 
 ## Setup
 
-The image will be built automatically on first run and **rebuilt automatically** whenever the Dockerfile changes. Claude Code will prompt you to log in on first use (OAuth). Your credentials are persisted in `~/.claude` so you only need to log in once.
+The image will be built automatically on first run and **rebuilt automatically** whenever the Dockerfile changes.
 
-Alternatively, if you have an Anthropic API key (to use your own API credits instead of a Claude Code subscription), set it before running:
+To use a Claude Code subscription run this. Claude Code will prompt you to log in on first use (OAuth). Your credentials are persisted in `~/.claude` so you only need to log in once.
+
+```bash
+claude-docker
+```
+
+Alternatively, if you have an Anthropic API key (to use your own API credits **instead of a Claude Code subscription**), set it before running:
 
 ```bash
 export ANTHROPIC_API_KEY=your-key-here

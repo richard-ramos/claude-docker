@@ -49,6 +49,7 @@ When run without extra arguments, you get an interactive Claude Code CLI session
 | `--gpu` | Enable GPU passthrough (`--gpus all`) |
 | `--no-network` | Disable network access (fully offline sandbox) |
 | `--worktree NAME` | Run in a git worktree (isolated branch + working dir) |
+| `--worktree-base DIR` | Base directory for worktrees (default: parent of project) |
 | `--sessions` | List and manage saved sessions |
 | `--rebuild` | Force rebuild the Docker image |
 | `-h, --help` | Show help message |
@@ -120,17 +121,31 @@ Delete sessions? [enter numbers, 'all', or empty to cancel]
 Use `--worktree` to run Claude in an isolated working directory with its own branch. This lets you run parallel sessions on different tasks without conflicts.
 
 ```bash
-# Named worktree — creates .claude/worktrees/feature-auth/ with branch worktree-feature-auth
-./claude.sh --worktree feature-auth
+# Named worktree — creates ../project--feature-auth/ with branch feature-auth
+claude-docker --worktree feature-auth
 
-# Auto-named worktree — Claude generates a random name
-./claude.sh --worktree
+# Auto-named worktree — generates a timestamped name
+claude-docker --worktree
 
 # Combine with other flags
-./claude.sh --worktree bugfix-123 --memory 8g /path/to/project
+claude-docker --worktree bugfix-123 --memory 8g /path/to/project
 ```
 
-The mounted workspace must be a git repo. Claude handles creating/cleaning up the worktree inside the container. On exit, if there are no changes the worktree is removed automatically; if there are changes you'll be prompted to keep or discard it.
+The mounted workspace must be a git repo. The worktree is created on the host at `../<repo>--<name>` as a sibling of the original project folder. Use `--worktree-base` to place worktrees elsewhere:
+
+```bash
+# All worktrees go into ~/worktrees/
+claude-docker --worktree feature-auth --worktree-base ~/worktrees
+```
+
+### Post-worktree hook
+
+If `.claude-docker/post-worktree.sh` exists in the repo, it runs on the host after the worktree is created (before the container starts). This is useful for things like initializing git submodules:
+
+```bash
+#!/usr/bin/env bash
+git submodule update --init --recursive
+```
 
 ## Auto-Rebuild
 

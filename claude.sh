@@ -16,6 +16,7 @@ Options:
   --gpu            Enable GPU passthrough (--gpus all)
   --no-network     Disable network access inside the container
   --worktree NAME  Run in a git worktree (isolated branch + working dir)
+  --worktree-base DIR  Base directory for worktrees (default: parent of project)
   --sessions       List and manage saved sessions
   --rebuild        Force rebuild the Docker image
   -h, --help       Show this help message
@@ -94,6 +95,7 @@ gpu_flag=false
 no_network=false
 force_rebuild=false
 worktree_name=""
+worktree_base=""
 positional=()
 
 while [ $# -gt 0 ]; do
@@ -121,10 +123,14 @@ while [ $# -gt 0 ]; do
             if [ -n "$worktree_name" ] && [[ "$worktree_name" != --* ]]; then
                 shift 2
             else
-                # --worktree without a name: Claude will auto-generate one
+                # --worktree without a name: auto-generate one
                 worktree_name="__auto__"
                 shift
             fi
+            ;;
+        --worktree-base)
+            worktree_base="$2"
+            shift 2
             ;;
         --rebuild)
             force_rebuild=true
@@ -216,12 +222,75 @@ abs_workdir="$(cd "${folders[0]}" && pwd)"
 session_hash=$(echo -n "$abs_workdir" | shasum | cut -d' ' -f1)
 session_file="$SESSION_DIR/$session_hash"
 
-# --- Worktree: prepend --worktree to claude args ---
+# --- Worktree: create a real git worktree and mount it instead ---
 if [ -n "$worktree_name" ]; then
+    repo_dir="$(cd "${folders[0]}" && pwd)"
+
     if [ "$worktree_name" = "__auto__" ]; then
-        claude_args=("--worktree" ${claude_args[@]+"${claude_args[@]}"})
+        worktree_name="claude-$(date +%Y%m%d-%H%M%S)"
+    fi
+
+    repo_basename=$(basename "$repo_dir")
+    if [ -n "$worktree_base" ]; then
+        mkdir -p "$worktree_base"
+        wt_path="$(cd "$worktree_base" && pwd)/${repo_basename}--${worktree_name}"
     else
-        claude_args=("--worktree" "$worktree_name" ${claude_args[@]+"${claude_args[@]}"})
+        wt_path="$(cd "$repo_dir/.." && pwd)/${repo_basename}--${worktree_name}"
+    fi
+
+    if [ ! -d "$wt_path" ]; then
+        echo "Creating git worktree: $wt_path (branch: $worktree_name)"
+        git -C "$repo_dir" worktree add "$wt_path" -b "$worktree_name"
+    else
+        echo "Using existing worktree: $wt_path"
+    fi
+
+    # Replace the folder with the worktree path
+    folders=("$wt_path")
+    abs_workdir="$wt_path"
+
+    # Mount worktree and main repo as siblings under /projects/
+    # so relative .git paths (e.g. submodules) resolve correctly.
+    # Main repo is read-only to prevent accidental modifications.
+    wt_basename="$(basename "$wt_path")"
+    main_repo_basename="$(basename "$repo_dir")"
+    mount_args=(
+        -v "$wt_path:/projects/$wt_basename"
+        -v "$repo_dir:/projects/$main_repo_basename:ro"
+        -v "$repo_dir/.git:/projects/$main_repo_basename/.git"
+    )
+    workdir="/projects/$wt_basename"
+
+    # Recalculate session hash for the worktree path
+    session_hash=$(echo -n "$abs_workdir" | shasum | cut -d' ' -f1)
+    session_file="$SESSION_DIR/$session_hash"
+fi
+
+# --- Run post-worktree hook if it exists ---
+if [ -n "$worktree_name" ]; then
+    hook="$wt_path/.claude-docker/post-worktree.sh"
+    if [ -x "$hook" ]; then
+        echo ""
+        echo -e "\033[1;33m=========================================\033[0m"
+        echo -e "\033[1;33m  POST-WORKTREE HOOK DETECTED\033[0m"
+        echo -e "\033[1;33m=========================================\033[0m"
+        echo -e "  File: \033[36m$hook\033[0m"
+        echo ""
+        echo -e "\033[90m--- Contents: ---\033[0m"
+        echo -e "\033[37m$(cat "$hook")\033[0m"
+        echo -e "\033[90m-----------------\033[0m"
+        echo ""
+        echo -e "\033[1;31m⚠  This script will run on your HOST machine\033[0m"
+        echo -e "\033[1;31m   with your user's full permissions.\033[0m"
+        echo ""
+        echo -en "Run this hook? [\033[1my\033[0m/\033[1mN\033[0m] "
+        read -r run_hook </dev/tty || run_hook=""
+        if [ "$run_hook" = "y" ] || [ "$run_hook" = "Y" ]; then
+            echo "Running post-worktree hook..."
+            (cd "$wt_path" && bash "$hook")
+        else
+            echo "Skipping post-worktree hook."
+        fi
     fi
 fi
 
@@ -257,6 +326,30 @@ fi
 # Container name based on directory
 dir_basename=$(basename "$abs_workdir" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9._-]/-/g')
 CONTAINER_NAME="claude-${dir_basename}-$$"
+
+# --- Print session info ---
+echo ""
+echo -e "\033[1;34m=========================================\033[0m"
+echo -e "\033[1;34m  CLAUDE DOCKER\033[0m"
+echo -e "\033[1;34m=========================================\033[0m"
+echo -e "  Container: \033[36m$CONTAINER_NAME\033[0m"
+echo -e "  Image:     \033[36m$IMAGE_NAME\033[0m"
+echo -e "  Workdir:   \033[36m$workdir\033[0m"
+if [ -n "$worktree_name" ]; then
+echo -e "  Worktree:  \033[33m$worktree_name\033[0m"
+echo -e "  Host path: \033[33m$wt_path\033[0m"
+fi
+if [ -n "$memory_limit" ]; then
+echo -e "  Memory:    \033[36m$memory_limit\033[0m"
+fi
+if $gpu_flag; then
+echo -e "  GPU:       \033[32menabled\033[0m"
+fi
+if $no_network; then
+echo -e "  Network:   \033[31mdisabled\033[0m"
+fi
+echo -e "\033[1;34m=========================================\033[0m"
+echo ""
 
 # --- Run ---
 docker run \
